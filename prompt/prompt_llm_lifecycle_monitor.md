@@ -281,6 +281,9 @@ https://docs.anthropic.com/en/docs/about-claude/model-deprecations
 
 ```text
 https://ai.google.dev/gemini-api/docs/deprecations
+https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions
+https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deprecations/open-models
+https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deprecations/partner-models
 ```
 
 y otras fuentes oficiales configuradas de Google cuando sean necesarias.
@@ -288,6 +291,11 @@ y otras fuentes oficiales configuradas de Google cuando sean necesarias.
 ## Google Vertex AI
 
 Utilizar exclusivamente documentación oficial de Google Cloud relativa a Vertex AI y Generative AI.
+
+```text
+https://docs.cloud.google.com/vertex-ai/generative-ai/docs/release-notes
+https://docs.cloud.google.com/gemini-enterprise-agent-platform
+```
 
 ## OpenAI
 
@@ -297,6 +305,15 @@ Utilizar exclusivamente documentación oficial de OpenAI:
 https://developers.openai.com/api/docs/models
 https://developers.openai.com/api/docs/models/all
 https://developers.openai.com/api/docs/deprecations
+```
+
+### BenchLM
+
+Es la única excepción a la norma de "utilizar únicamente fuentes oficiales".
+Esta página recopila información **oficial** del lifecycle de los modelos de varios proveedores.
+
+```text
+https://benchlm.ai/deprecations
 ```
 
 No utilizar como fuente de verdad:
@@ -333,6 +350,19 @@ LiteLLM se utilizará para:
 1. obtener los modelos disponibles/utilizados;
 2. obtener información detallada de los modelos;
 3. ejecutar el LLM encargado de investigar lifecycle.
+
+El modelo utilizado para investigar debe ser configurable:
+
+```text
+LIFECYCLE_RESEARCH_MODEL
+```
+
+Ejemplo conceptual:
+
+```text
+LITELLM_BASE_URL = https://<gateway>
+LIFECYCLE_RESEARCH_MODEL = <model>
+```
 
 ---
 
@@ -375,7 +405,7 @@ Un modelo sin información adicional no debe detener todo el proceso.
 El Lifecycle Monitor utilizará un modelo configurable:
 
 ```text
-DEPRECATION_RESEARCH_MODEL
+LIFECYCLE_RESEARCH_MODEL
 ```
 
 Endpoint:
@@ -395,7 +425,7 @@ Request conceptual:
 
 ```json
 {
-  "model": "${DEPRECATION_RESEARCH_MODEL}",
+  "model": "${LIFECYCLE_RESEARCH_MODEL}",
   "messages": [
     {
       "role": "system",
@@ -456,6 +486,27 @@ El LLM **NO debe decidir cuándo notificar**.
 
 El LLM **NO debe gestionar Jira ni Teams**.
 
+## 9.1. System prompt
+
+El system prompt debe definir como mínimo:
+
+1. El objetivo del servicio.
+2. Que debe investigar exclusivamente información relacionada con lifecycle/deprecación/retirada de modelos.
+3. Las fuentes oficiales que debe consultar.
+4. Que las fuentes oficiales son la fuente de verdad.
+5. Que debe distinguir entre:
+    - modelo activo;
+    - modelo anunciado como deprecated;
+    - fecha de deprecación;
+    - fecha de retirada/shutdown;
+    - fecha desconocida;
+    - sustituto recomendado.
+6. Que no debe inventar fechas.
+7. Que debe indicar cuándo un dato no está disponible.
+8. Que debe devolver exclusivamente el JSON definido por el contrato.
+9. Que debe incluir la URL de la fuente utilizada para cada dato relevante.
+10. Que debe indicar su nivel de confianza cuando exista ambigüedad.
+11. Instrucciones explícitas y reglas de validación.
 ---
 
 # 10. Contrato JSON del LLM
@@ -551,9 +602,21 @@ retirement_date >= deprecation_date
 
 cuando ambas existan.
 
-Las fechas pasadas son válidas cuando estén respaldadas por una fuente oficial.
+Las fechas anteriores a la fecha de comprobación no deben rechazarse por ser
+antiguas. Si están respaldadas por una fuente oficial, siguen siendo necesarias
+para detectar incumplimientos: un modelo deprecado o retirado que continúa en uso
+representa un riesgo actual. En ese caso:
 
-Un modelo retirado que continúa utilizándose representa un riesgo actual.
+* `deprecation_date < today` debe indicar que la migración está atrasada;
+* `retirement_date < today` debe indicar que la retirada ya se ha producido;
+* si la aplicación continúa utilizando el modelo, la severidad mínima debe ser
+  `CRITICAL` y debe generarse o mantenerse la alerta;
+* la fecha, la fuente y la evidencia deben conservarse en el estado actual y en el
+  histórico.
+
+Una fecha pasada solo debe quedar pendiente de revisión cuando sea incoherente,
+contradictoria con la fuente oficial, carezca de evidencia suficiente o no pueda
+asociarse con segurida
 
 Si una fuente no está disponible:
 
@@ -566,11 +629,14 @@ Si una fuente no está disponible:
 
 # 12. Normalización de modelos
 
+Los nombres de modelos utilizados internamente o por LiteLLM pueden NO coincidir exactamente con los nombres publicados por el fabricante.
+
 No asumir:
 
 ```text
 litellm_model_id == provider_model_id
 ```
+La solución debe disponer de una estrategia explícita de normalización/matching.
 
 Distinguir:
 
@@ -765,6 +831,35 @@ No crear mappings falsos.
 
 Mantener trazabilidad del origen de cada mapping.
 
+Una opción es establecer una estrategia en capas:
+
+                    MODELO DE LITELLM
+                           │
+                           ▼
+                  ¿Tenemos alias exacto?
+                     /           \
+                   Sí             No
+                   │               │
+                   ▼               ▼
+                MATCH       ¿Tenemos mapping
+                              configurado?
+                             /          \
+                           Sí            No
+                           │              │
+                           ▼              ▼
+                         MATCH       MATCHING
+                                     AUTOMÁTICO
+                                          │
+                                          ▼
+                                   ¿Confianza alta?
+                                    /          \
+                                  Sí            No
+                                  │              │
+                                  ▼              ▼
+                                MATCH       REVISIÓN
+                                            MANUAL
+
+
 ---
 
 # 18. Tabla MODEL_LIFECYCLE_HISTORY
@@ -857,7 +952,7 @@ Debe responder:
 
 ---
 
-# 21. Nueva tabla NOTIFICATION_TRACKING
+# 21. Tabla NOTIFICATION_TRACKING
 
 Esta tabla representa el **estado operativo del seguimiento de una combinación modelo-aplicación-entorno**.
 
@@ -2037,7 +2132,7 @@ Externalizar como mínimo:
 LITELLM_BASE_URL
 LITELLM_API_KEY
 
-DEPRECATION_RESEARCH_MODEL
+LIFECYCLE_RESEARCH_MODEL
 
 SYSTEM_PROMPT
 SYSTEM_PROMPT_FILE
@@ -2905,7 +3000,7 @@ flowchart TD
 
 ## Fuente de verdad
 
-Solo documentación oficial de proveedores.
+Solo documentación oficial de proveedores o páginas de terceros cuidadosamente seleccionadas.
 
 ## Inventario
 
