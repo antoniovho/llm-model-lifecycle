@@ -23,7 +23,7 @@ El objetivo es garantizar que ninguna aplicación utilice en producción, PRE u 
 El proceso debe:
 
 ```text
-Fuentes oficiales de proveedores de modelos, fuentes de secundarias de confianza
+Fuentes de proveedores y fuentes de terceros configuradas
              │
              ▼
       LLM con Internet
@@ -59,9 +59,13 @@ de lifecycle de modelos
    Nueva comprobación
 ```
 
-El proceso se ejecutará periódicamente mediante una función CRON configurable.
+El proceso se ejecutará periódicamente mediante un CRON job configurable.
 
-La frecuencia inicial será **diario**.
+La frecuencia inicial será todos los lunes a las 08:00, mediante:
+
+```text
+CRON_SCHEDULE="0 8 * * 1"
+```
 
 ---
 
@@ -72,7 +76,7 @@ La solución debe utilizar el **enfoque: LLM con acceso a Internet**.
 ```mermaid
 flowchart LR
 
-    PROVIDER["Proveedor<br/>Fuente oficial"]
+    PROVIDER["Proveedor<br/>Fuente configurada"]
 
     PROVIDER --> LLM["LLM + Internet"]
 
@@ -85,7 +89,7 @@ flowchart LR
 
 NO implementar scraping manual específico para cada proveedor como mecanismo principal.
 
-Las únicas fuentes válidas para determinar lifecycle son las **fuentes oficiales de los fabricantes**.
+Las fuentes válidas para determinar lifecycle son las fuentes configuradas y proporcionadas para el servicio, tanto oficiales como fuentes de terceros explícitamente autorizadas.
 
 El LLM será responsable de consultar/analizar dichas fuentes y devolver la información estructurada.
 
@@ -108,9 +112,9 @@ Los proveedores deben ser configurables.
 
 ---
 
-# 4. Fuentes de verdad
+# 4. Fuentes de información autorizadas
 
-Las fuentes oficiales son la única fuente autorizada para determinar:
+Las fuentes configuradas para el servicio, oficiales o de terceros, tienen la misma importancia para determinar:
 
 * existencia del modelo;
 * estado del modelo;
@@ -154,24 +158,16 @@ Utilizar las páginas/documentación oficial de modelos y lifecycle de OpenAI.
 
 ### BenchLM
 
-Recopila información oficial de lifecycle/deprecations de modelos de varios proveedores y la muestra en formato calendario.
+Recopila información de lifecycle/deprecations de modelos de varios proveedores y la muestra en formato calendario. Es una fuente de terceros explícitamente autorizada y tiene la misma importancia que las fuentes oficiales configuradas.
 
 - `https://benchlm.ai/deprecations`
 
 
 **IMPORTANTE:**
 
-No utilices:
+No utilices fuentes adicionales que no estén configuradas o proporcionadas explícitamente para esta investigación.
 
-* GitHub como fuente de verdad.
-* Reddit.
-* Blogs.
-* Stack Overflow.
-* artículos de terceros.
-* páginas de agregadores.
-* documentación no oficial que no se haya señalado como importante a tener en cuenta.
-
-Si existe información contradictoria entre fuentes, prevalece la fuente oficial del proveedor correspondiente.
+Si existe información contradictoria entre fuentes autorizadas, registrar la contradicción y conservar las URLs y evidencias de cada una. Cuando el conflicto afecte a una fecha de deprecación o retirada, utilizar como fecha operativa la más restrictiva: la fecha válida más cercana al día de la ejecución. Reflejar la ambigüedad en el nivel de confianza. No aplicar una precedencia automática por el tipo de fuente.
 
 La URL exacta utilizada debe quedar registrada en la base de datos.
 
@@ -293,8 +289,8 @@ El system prompt debe definir como mínimo:
 
 1. El objetivo del servicio.
 2. Que debe investigar exclusivamente información relacionada con lifecycle/deprecación/retirada de modelos.
-3. Las fuentes oficiales que debe consultar.
-4. Que las fuentes oficiales son la fuente de verdad.
+3. Las fuentes configuradas que debe consultar, oficiales o de terceros explícitamente autorizadas.
+4. Que las fuentes configuradas son las fuentes de información autorizadas y tienen la misma importancia.
 5. Que debe distinguir entre:
     - modelo activo;
     - modelo anunciado como deprecated;
@@ -324,7 +320,7 @@ Modelos:
 - anthropic/claude-sonnet-4-20250514
 - anthropic/claude-haiku-3-20240307
 
-Fuente oficial:
+Fuentes autorizadas:
 <URL>
 
 Contexto:
@@ -343,7 +339,7 @@ Necesitamos conocer:
 Devuelve exclusivamente el JSON definido por el schema.
 ```
 
-El servicio debe generar esta consulta a partir de los modelos obtenidos del inventario LiteLLM y de las fuentes oficiales configuradas.
+El servicio debe generar esta consulta a partir de los modelos obtenidos del inventario LiteLLM y de las fuentes autorizadas configuradas.
 ---
 
 # 6. Descubrimiento de modelos mediante LiteLLM
@@ -530,18 +526,18 @@ El microservicio debe enviar al modelo LLM:
 
 * contexto del problema;
 * lista de proveedores;
-* URLs oficiales;
+* URLs de las fuentes autorizadas;
 * instrucciones explícitas;
 * modelo(s) a investigar;
 * definición exacta del JSON esperado;
 * reglas de validación;
-* prohibición de utilizar fuentes secundarias.
+* prohibición de utilizar fuentes no configuradas ni proporcionadas explícitamente.
 
 El LLM tendrá acceso a Internet.
 
 El system prompt debe indicarle que:
 
-1. solo puede utilizar las fuentes oficiales o de información proporcionadas;
+1. solo puede utilizar las fuentes de información configuradas o proporcionadas explícitamente;
 2. debe consultar dichas fuentes;
 3. debe buscar información de lifecycle;
 4. debe distinguir deprecation de retirement/shutdown;
@@ -659,7 +655,7 @@ retirement_date = 2020-01-01
 sin registrar la anomalía.
 
 Las fechas anteriores a la fecha de comprobación no deben rechazarse por ser
-antiguas. Si están respaldadas por una fuente oficial, siguen siendo necesarias
+antiguas. Si están respaldadas por una fuente autorizada, siguen siendo necesarias
 para detectar incumplimientos: un modelo deprecado o retirado que continúa en uso
 representa un riesgo actual. En ese caso:
 
@@ -671,7 +667,7 @@ representa un riesgo actual. En ese caso:
   histórico.
 
 Una fecha pasada solo debe quedar pendiente de revisión cuando sea incoherente,
-contradictoria con la fuente oficial, carezca de evidencia suficiente o no pueda
+contradictoria con una fuente autorizada, carezca de evidencia suficiente o no pueda
 asociarse con seguridad al modelo del inventario. La antigüedad por sí sola no es
 motivo para ignorarla.
 
@@ -757,7 +753,7 @@ erDiagram
         varchar owner_email
         varchar jira_project
         varchar jira_component
-        varchar criticality
+        varchar criticality "nullable"
         boolean active
     }
 
@@ -1085,7 +1081,7 @@ active
 
 Representa las aplicaciones corporativas.
 
-`criticality` representa la criticidad de negocio de la aplicación.
+`criticality` representa la criticidad de negocio de la aplicación. Es opcional (`NULL` permitido) y no interviene en el cálculo de severidad actual; se conserva para una posible evolución futura de la fórmula.
 
 Valores recomendados:
 
@@ -1160,7 +1156,7 @@ PRE
 PRO
 ```
 
-y la criticidad puede ser diferente.
+y la criticidad puede ser diferente cuando esté informada, aunque no interviene en la fórmula de severidad actual.
 
 Ejemplo:
 
@@ -1214,14 +1210,14 @@ Esto permitirá auditar las ejecuciones del proceso.
 
 # 21. CRON
 
-La ejecución será diaria.
+La ejecución será todos los lunes a las 08:00.
 
 Debe ser configurable mediante configuración externa.
 
 Ejemplo:
 
 ```text
-CRON_SCHEDULE="0 0 * * 1"
+CRON_SCHEDULE="0 8 * * 1"
 ```
 
 No hardcodear la frecuencia.
@@ -1251,7 +1247,7 @@ Implementar este flujo:
 
 3. Obtener información de model/info
 
-4. Obtener fuentes oficiales configuradas
+4. Obtener fuentes autorizadas configuradas
 
 5. Enviar contexto + URLs + modelos al LLM
 
@@ -1299,12 +1295,10 @@ Implementar una fórmula determinista y explicable.
 
 No dejar que el LLM determine la severidad.
 
-La severidad debe depender de:
+La severidad debe depender únicamente de:
 
 1. entorno;
-2. tiempo hasta deprecación;
-3. tiempo hasta retirada;
-4. criticidad de la aplicación.
+2. tiempo hasta deprecación o retirada.
 
 ## Peso por entorno
 
@@ -1313,15 +1307,6 @@ PRO = 4
 PRE  = 3
 ITG = 2
 DEV  = 1
-```
-
-## Peso por criticidad de aplicación
-
-```text
-critical = 4
-high     = 3
-medium   = 2
-low      = 1
 ```
 
 ## Factor de tiempo
@@ -1344,15 +1329,12 @@ days_to_event =
     deprecation_date - today
 ```
 
-Escala:
+Escala, evaluada en este orden para resolver el solapamiento de los límites:
 
 ```text
-> 180 días  = 1
-91-180      = 2
-31-90       = 3
-8-30        = 4
-0-7         = 5
-< 0         = 6
+<= 15 días = 3
+16-30 días = 2
+> 30 días  = 1
 ```
 
 Calcular:
@@ -1361,30 +1343,23 @@ Calcular:
 risk_score =
     environment_weight
     *
-    application_criticality_weight
-    *
     time_weight
 ```
 
 Mapear a:
 
 ```text
-1-15   INFO
-16-30  WARNING
-31-60  HIGH
->60    CRITICAL
+>= 6  CRITICAL
+< 6   PLANIFIED
 ```
-
-Ajustar los rangos si la distribución resultante no es razonable durante las pruebas.
 
 La fórmula debe estar documentada y ser configurable.
 
 Se debe evaluar siempre la severidad con la fecha del día de la
-ejecución. Por tanto, si la ejecución es semanal, un modelo con 5 días hasta la retirada ya debe producir
+ejecución. Por tanto, un modelo con 5 días hasta la retirada debe producir
 `CRITICAL` aunque la ejecución anterior lo hubiera detectado con más antelación. La
-frecuencia semanal no debe interpretarse como una garantía de aviso con siete días
-de margen: para reducir ese riesgo, `CRON_SCHEDULE` debe poder configurarse con una
-frecuencia diaria o inferior en entornos productivos.
+frecuencia inicial es semanal (lunes a las 08:00), pero `CRON_SCHEDULE` debe seguir
+siendo configurable para adaptar la frecuencia a cada entorno.
 
 ---
 
@@ -1467,39 +1442,20 @@ El mensaje debe indicar claramente:
 
 # 26. Frecuencia de las notificaciones
 
-No enviar una notificación cada vez que se ejecute el CRON.
-
 Debe existir idempotencia.
 
-Propuesta:
+Se debe notificar en cada ejecución del servicio de monitorización para cada aplicación, modelo y entorno afectados que continúen en uso.
 
-```text
->180 días
-INFO
-notificación inicial
+En cada ejecución:
 
-180-91 días
-WARNING
-cada 30 días
+1. revisar si el modelo sigue siendo utilizado por la aplicación en el entorno afectado;
+2. comprobar si el ticket de Jira existente sigue abierto;
+3. si el uso continúa y el ticket sigue abierto, enviar un nuevo recordatorio por Teams con la fecha de deprecación y/o retirada y los días restantes;
+4. si no existe un ticket de Jira abierto para la combinación `model`, `application` y `environment`, crear uno;
+5. si ya existe un ticket de Jira abierto, actualizarlo cuando corresponda, pero no crear un ticket nuevo;
+6. si la aplicación deja de utilizar el modelo o el ticket ha sido cerrado, no enviar el recordatorio recurrente por Teams.
 
-90-31 días
-HIGH
-cada 14 días
-
-30-8 días
-CRITICAL
-cada 7 días
-
-7-1 días
-CRITICAL
-cada 2 días
-
-retirada alcanzada
-CRITICAL
-diaria hasta que desaparezca el uso
-```
-
-Las frecuencias deben ser configurables.
+La idempotencia aplica a los tickets de Jira: no se deben duplicar. Los mensajes de Teams son recordatorios recurrentes y pueden enviarse en cada ejecución mientras se cumplan las condiciones anteriores.
 
 No enviar una notificación duplicada para el mismo:
 
@@ -1507,8 +1463,8 @@ No enviar una notificación duplicada para el mismo:
 model
 application
 environment
-notification_type
-period
+channel = JIRA
+ticket abierto
 ```
 
 ---
@@ -1542,7 +1498,7 @@ Crear un modelo interno común:
 ```json
 {
   "event_type": "MODEL_DEPRECATION",
-  "severity": "HIGH",
+  "severity": "CRITICAL",
   "provider": "anthropic",
   "model": {
     "model_id": "claude-example",
@@ -1576,7 +1532,7 @@ El ticket debe contener como mínimo:
 ### Summary
 
 ```text
-[LLM DEPRECATION][HIGH] <model> - <application> - <environment>
+[LLM DEPRECATION][<SEVERITY>] <model> - <application> - <environment>
 ```
 
 ### Description
@@ -2007,36 +1963,33 @@ Implementar al menos estos casos:
 
 ```text
 prod
-critical
->180 días
+>30 días
 ```
 
 Resultado:
 
 ```text
-INFO
+PLANIFIED
 ```
 
 ### Caso 2
 
 ```text
 prod
-critical
-60 días
+30 días
 ```
 
 Resultado:
 
 ```text
-HIGH
+CRITICAL
 ```
 
 ### Caso 3
 
 ```text
-prod
-critical
-20 días
+pre
+15 días
 ```
 
 Resultado:
@@ -2048,12 +2001,17 @@ CRITICAL
 ### Caso 4
 
 ```text
-pre
-medium
+itg
 20 días
 ```
 
-Resultado menor que PRO crítico.
+Resultado:
+
+```text
+PLANIFIED
+```
+
+Los valores de `criticality` de la aplicación no deben afectar a ninguno de estos casos.
 
 ### Caso 5
 
@@ -2120,7 +2078,7 @@ Al terminar presenta esta tabla con resultados REALES:
 | 3  | PostgreSQL conectado                      |           |           |
 | 4  | LiteLLM `/models/` funciona               |           |           |
 | 5  | LiteLLM `/model/info` funciona            |           |           |
-| 6  | LLM puede consultar las fuentes oficiales |           |           |
+| 6  | LLM puede consultar las fuentes autorizadas |           |           |
 | 7  | LLM devuelve JSON estructurado            |           |           |
 | 8  | JSON Schema se valida                     |           |           |
 | 9  | Modelos se normalizan                     |           |           |
@@ -2197,7 +2155,7 @@ El README debe explicar:
 7. migraciones;
 8. LiteLLM;
 9. LLM de investigación;
-10. fuentes oficiales;
+10. fuentes autorizadas;
 11. algoritmo de matching;
 12. fórmula de severidad;
 13. política de notificaciones;
@@ -2216,7 +2174,7 @@ El README debe explicar:
 Genera también un diagrama Mermaid que represente:
 
 ```text
-                 FUENTES OFICIALES
+                 FUENTES AUTORIZADAS
           ┌──────────┬──────────┬──────────┬──────────┐
           │Anthropic │  Google  │  OpenAI  │ BenchLM  │
           └────┬─────┴────┬─────┴────┬─────┴────┬─────┘
@@ -2262,7 +2220,7 @@ Estas decisiones son obligatorias:
 
 ### Fuente de verdad
 
-Solo proveedores oficiales y fuentes secundarias especificadas.
+Solo fuentes configuradas o proporcionadas explícitamente, oficiales o de terceros.
 
 ### Base de datos
 
@@ -2298,7 +2256,7 @@ Jira + Teams. No se envían avisos por correo.
 
 ### Frecuencia de búsqueda
 
-Diaria y configurable.
+Todos los lunes a las 08:00 y configurable.
 
 ### Severidad
 
@@ -2349,13 +2307,13 @@ No:
 La solución final debe permitir ejecutar:
 
 ```text
-CRON diario
+CRON semanal (lunes a las 08:00)
       │
       ▼
 LiteLLM → modelos actuales
       │
       ▼
-Fuentes oficiales
+Fuentes autorizadas
       │
       ▼
 LLM + Internet
